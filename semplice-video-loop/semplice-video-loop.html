@@ -1,0 +1,74 @@
+<!--
+  Semplice Self-Hosted Video Loop Fix
+  ====================================
+  Verhindert, dass selbst-gehostete Videos in Semplice beim Klick pausieren.
+  Videos sollen wie animierte Bilder im Loop laufen.
+  
+  Optional: per data-link Attribut am .smp-video können Videos klickbar zu
+  einer URL weiterleiten (z.B. zur Projektseite).
+  
+  Einbau: Semplice → Settings → Custom Code → JS/HTML Footer
+-->
+
+<style>
+  /* Semplice Pause-Overlay und Play-Button verstecken */
+  .smp-video .smp-video-overlay,
+  .smp-video .smp-video-play,
+  .smp-video .play-button,
+  .smp-video .video-play,
+  .smp-video.is-paused::after,
+  .smp-video.is-paused::before {
+    display: none !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
+  }
+
+  /* Cursor erbt von body */
+  .smp-video, .smp-video * { cursor: inherit !important; }
+
+  /* Wenn als Link markiert: Pointer-Cursor */
+  .smp-video[data-link] { cursor: pointer !important; }
+</style>
+
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('.smp-video').forEach(function(wrap) {
+      var video = wrap.querySelector('video');
+      if (!video) return;
+
+      video.loop = true;
+      video.muted = true;
+      video.playsInline = true;
+      video.play().catch(function() {});
+
+      // Semplices is-paused-Klasse permanent entfernen
+      var observer = new MutationObserver(function() {
+        if (wrap.classList.contains('is-paused')) {
+          wrap.classList.remove('is-paused');
+        }
+      });
+      observer.observe(wrap, { attributes: true, attributeFilter: ['class'] });
+
+      // Pause-Event direkt am Video abfangen
+      video.addEventListener('pause', function() {
+        setTimeout(function() {
+          if (video.ended === false) video.play().catch(function() {});
+        }, 10);
+      });
+
+      // Click-Handler: entweder weiterleiten oder Klick schlucken
+      var link = wrap.getAttribute('data-link');
+      wrap.addEventListener('click', function(e) {
+        e.stopPropagation();
+        e.preventDefault();
+        if (link) window.location.href = link;
+      }, true);
+
+      video.addEventListener('click', function(e) {
+        e.stopPropagation();
+        e.preventDefault();
+        if (link) window.location.href = link;
+      }, true);
+    });
+  });
+</script>

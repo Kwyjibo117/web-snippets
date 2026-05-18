@@ -1,0 +1,379 @@
+<!--
+  Play-Seite Gallery
+  ==================
+  Masonry-Layout (CSS column-count) für ~70 Bilder.
+  - Bilder behalten ihr natürliches Seitenverhältnis
+  - Querformate werden proportional vergrößert (mehr visuelle Präsenz)
+  - Zufällige Größen-Variation (90-120%) und horizontale Verschiebungen
+  - Maus-Parallax in X und Y (Bilder bewegen sich entgegen der Maus)
+  - Seed-basiertes Random für reproduzierbare Layouts
+  
+  Einbau: Semplice → Custom Code / HTML-Modul
+  Bilder-URLs in der `images`-Array eintragen
+-->
+
+<style>
+  .play-grid-wrap {
+    position: relative;
+    width: 100%;
+    padding: 4vw 3vw;
+    overflow: hidden;
+  }
+  .play-grid {
+    column-count: 5;
+    column-gap: 1.5vw;
+  }
+  .play-item {
+    display: block;
+    width: 100%;
+    margin-bottom: 1.5vw;
+    break-inside: avoid;
+    will-change: transform;
+    position: relative;
+    opacity: 0;
+    transition: opacity 0.7s ease;
+  }
+  .play-item img {
+    display: block;
+    width: 100%;
+    height: auto;
+    border-radius: 4px;
+    transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+  .play-item:hover {
+    z-index: 10;
+  }
+  .play-item:hover img {
+    transform: scale(1.12);
+  }
+  .lightbox-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0);
+    backdrop-filter: blur(0px);
+    -webkit-backdrop-filter: blur(0px);
+    z-index: 1000;
+    transition: background 0.4s ease, backdrop-filter 0.4s ease, -webkit-backdrop-filter 0.4s ease;
+  }
+  .lightbox-overlay--open {
+    background: rgba(0,0,0,0.78);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+  }
+  .lightbox-img {
+    position: fixed;
+    display: block;
+    border-radius: 6px;
+    pointer-events: none;
+    will-change: transform;
+  }
+
+  @media (max-width: 1200px) {
+    .play-grid { column-count: 4; }
+  }
+  @media (max-width: 900px) {
+    .play-grid { column-count: 3; column-gap: 2vw; }
+    .play-item { margin-bottom: 2vw; }
+  }
+  @media (max-width: 600px) {
+    .play-grid { column-count: 3; }
+  }
+</style>
+
+<div class="play-grid-wrap">
+  <div class="play-grid" id="playGrid"></div>
+</div>
+
+<script>
+(function() {
+  // ===== BILDER HIER EINTRAGEN =====
+  var images = [
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/159_goo_glowing-glass-11-copy_Square.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/156_200120_GOO_CANVAS_C_00.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/157_glass-rock-01_Square.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/155_200127_GOO_CANVAS_06_0075_Square.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/153_untitled_E_02_B-web_Square.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/152_200408_SAM_moss_06_convert_Square.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/147_200407_SAM_overhead_18_convert.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/151_SAM-ambi-tracks-F-04_Square.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/149_200116_GOO_dukers_02_A_Square.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/143_100-spheresonglass-01-c.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/142_woo-alibaba-logo-a-08-01.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/141_spheres-out-of-tubes-02-b.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/160_210810_Landscape-Setup_038_Cam-A_Square.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/144_ForestEnv_17_0032_Square.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/140_bw1hdNBg_Square.jpeg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/134_200120_GOO_CANVAS_D_01_0223.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/133_RS_Scan_006_0087_Square.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/130_glowing-glass-01.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/132_MQFF_AA_disp_test_018_0014_Square.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/131_RS_Sunglasses_Looldev_002_0075_Square.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/129_200407_SAM_overhead_11_convert.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/128_woo-alibaba-logo-a-08-04_Square.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/126_victorian-room-ph-04_s01_02.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/124_200121_GOO_pillars_04.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/125_sam-sliding-tiles-00-k_Square.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/119_menadering-river-01_Square.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/120_200120_GOO_CANVAS_D_01_0223_Square.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/114_200127_GOO_CANVAS_18_0075_Square.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/113_200408_SAM_moss_14_convert.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/110_210803_Dust_Portrait_001_0001_Square.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/112_210825_Lookdev_000_Square.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/108_goo_glowing-glass-03_0049_Square.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/106_refracting-stripes-vertical.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/102_victorian-room-02-c_s01_02.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/104_200116_GOO_dukers_02_B_Square.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/103_ForestEnv_16_0032_Square.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/097_200408_SAM_moss_09_convert_Square.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/096_200120_GOO_grid_00.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/099_210803_Dust_Portrait_006_0054_Square.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/095_190923_ONE_turrell_00_Square.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/092_Refractions-03_v001_Square.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/091_goo_canvas_glass-walls_02_Square.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/087_shadow-hall-00-a.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/086_RaySwitch_002_Square.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/082_200406_SAM_overhead_01_convert.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/083_Refractions-01_v001_Square.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/080_210322_OP_01_Square.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/074_glowing-glass-00.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/076_Refractions-04_v001_Square.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/073_RaySwitch_009_Square.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/068_bauhaus_windows_00_0314.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/067_sam-shifting-glass-walls-00-a.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/066_RS_Sunglasses_Looldev_005_Square.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/064_MQFF_Layout_01.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/063_300-frost-cover-00.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/060_210803_Dust_Portrait_007_0078_Square.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/056_210811_Landscape-Setup_044_Cam-A0016_Square.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/054_RS_Sunglasses_Looldev_004_Square.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/050_210803_Dust_Portrait_003_0067_Square.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/052_210825_Lookdev_003_Square.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/046_200212_cracked_04.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/044_goo_canvas_glass-walls_01.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/042_200120_GOO_CANVAS_B_04.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/041_samsung_ambient_window_research04_Square.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/038_MQFF_Layout_02.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/035_spheres-out-of-tubes-00-a.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/034_210803_Dust_Portrait_004_0200_Square.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/033_goo_glowing-glass-11_Square.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/032_200120_GOO_CANVAS_01.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/029_LS_Glass-Server_v001_Cam-04_Square.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/024_210810_Landscape-Setup_035_Cam-A_Square.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/023_rg-closeUp5-highres_Square.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/022_RS_Sunglasses_Looldev_009_Square.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/019_colored-space-05-a0036.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/020_200407_SAM_overhead_10_convert_Square.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/015_200120_GOO_grid_01_Square.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/013_Lambert_008_161005.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/011_200407_SAM_overhead_15_convert.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/008_211-tree-shadows-05-f.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/001_200406_SAM_overhead_04_convert_Square.jpg'
+  ];
+  // =================================
+
+  // Random seed bei jedem Laden → andere Reihenfolge und Layout-Verteilung
+  var seed = Math.floor(Math.random() * 233280);
+  function rnd() {
+    seed = (seed * 9301 + 49297) % 233280;
+    return seed / 233280;
+  }
+
+  // Bilder-Array mischen (Fisher-Yates)
+  for (var i = images.length - 1; i > 0; i--) {
+    var j = Math.floor(Math.random() * (i + 1));
+    var tmp = images[i]; images[i] = images[j]; images[j] = tmp;
+  }
+
+  // Layout-Settings: Desktop vs. Mobile (≤ 768px)
+  var isMobile = window.innerWidth <= 768;
+  var lc = isMobile ? {
+    paddingX:   '2vw',
+    scaleMult:  0.95,
+    shiftX:     20,    // ± %
+    shiftY:     5,     // ± vw
+    boostCap:   1.4
+  } : {
+    paddingX:   '19vw',
+    scaleMult:  1.25,
+    shiftX:     10,    // ± %
+    shiftY:     6,     // ± vw
+    boostCap:   1.8
+  };
+
+  var wrap = document.querySelector('.play-grid-wrap');
+  wrap.style.padding = (lc.shiftY + 4) + 'vw ' + lc.paddingX;
+
+  var grid = document.getElementById('playGrid');
+  var items = [];
+
+  images.forEach(function(src) {
+    var item = document.createElement('div');
+    item.className = 'play-item';
+
+    // Größen-Skalierung: 100–120% × masterScale
+    var scale = (1.0 + rnd() * 0.2) * lc.scaleMult;
+    var rawWidth = scale * 100;
+    item.style.width = rawWidth.toFixed(1) + '%';
+
+    // Horizontaler Versatz — Overflow wird mittig verteilt
+    var shiftX = rnd() * lc.shiftX * 2 - lc.shiftX;
+    item.dataset.shiftX = shiftX.toFixed(1);
+    item.style.marginLeft = (shiftX - (rawWidth - 100) / 2).toFixed(1) + '%';
+
+    // Vertikaler Versatz: ± lc.shiftY vw (visuell, ohne Flow-Einfluss)
+    var shiftY = (rnd() * lc.shiftY * 2 - lc.shiftY).toFixed(2);
+    item.style.top = shiftY + 'vw';
+
+    // Maus-Parallax-Stärke pro Bild: 15-60 Pixel
+    item.dataset.mouse = (15 + rnd() * 45).toFixed(1);
+
+    var img = document.createElement('img');
+    img.alt = '';
+
+    img.addEventListener('load', function() {
+      var ratio = img.naturalWidth / img.naturalHeight;
+      if (ratio > 1) {
+        var boost = Math.min(ratio, lc.boostCap);
+        var newWidth = parseFloat(item.style.width) * boost;
+        item.style.width = newWidth.toFixed(1) + '%';
+        item.style.marginLeft = (parseFloat(item.dataset.shiftX) - (newWidth - 100) / 2).toFixed(1) + '%';
+      }
+      // Erst einblenden wenn Bild tatsächlich geladen ist
+      item.style.transitionDelay = Math.floor(Math.random() * 500) + 'ms';
+      item.style.opacity = '1';
+      setTimeout(function() { item.style.transitionDelay = ''; }, 700);
+    });
+
+    img.src = src;
+    item.appendChild(img);
+
+    img.addEventListener('click', function() { openLightbox(img); });
+
+    grid.appendChild(item);
+    items.push(item);
+  });
+
+  // Parallax erst nach dem Intro aktivieren
+  var parallaxReady = false;
+  setTimeout(function() { parallaxReady = true; }, 1200);
+
+  // Lightbox mit FLIP-Animation
+  function openLightbox(img) {
+    var rect = img.getBoundingClientRect();
+
+    // Zielgröße berechnen (Seitenverhältnis beibehalten, max 88vw/88vh)
+    var maxW = window.innerWidth * 0.88;
+    var maxH = window.innerHeight * 0.88;
+    var ratio = img.naturalWidth / img.naturalHeight;
+    var finalW = ratio > maxW / maxH ? maxW : maxH * ratio;
+    var finalH = ratio > maxW / maxH ? maxW / ratio : maxH;
+    var finalLeft = (window.innerWidth  - finalW) / 2;
+    var finalTop  = (window.innerHeight - finalH) / 2;
+
+    // FLIP: Versatz von Ziel- zur Startposition
+    var tx = rect.left + rect.width  / 2 - (finalLeft + finalW / 2);
+    var ty = rect.top  + rect.height / 2 - (finalTop  + finalH / 2);
+    var sx = rect.width  / finalW;
+    var sy = rect.height / finalH;
+
+    var overlay = document.createElement('div');
+    overlay.className = 'lightbox-overlay';
+
+    var lbImg = document.createElement('img');
+    lbImg.src = img.src;
+    lbImg.className = 'lightbox-img';
+    lbImg.style.width  = finalW + 'px';
+    lbImg.style.height = finalH + 'px';
+    lbImg.style.left   = finalLeft + 'px';
+    lbImg.style.top    = finalTop  + 'px';
+    lbImg.style.transform = 'translate(' + tx + 'px,' + ty + 'px) scale(' + sx + ',' + sy + ')';
+
+    overlay.appendChild(lbImg);
+    document.body.appendChild(overlay);
+    document.documentElement.style.overflow = 'hidden';
+    document.body.style.overflow = 'hidden';
+    lightboxOpen = true;
+
+    // Zwei rAF-Frames: sicherstellen dass Browser die Startposition gerendert hat
+    requestAnimationFrame(function() {
+      requestAnimationFrame(function() {
+        overlay.classList.add('lightbox-overlay--open');
+        lbImg.style.transition = 'transform 0.45s cubic-bezier(0.34, 1.4, 0.64, 1)';
+        lbImg.style.transform  = 'translate(0,0) scale(1)';
+      });
+    });
+
+    function close() {
+      lightboxOpen = false;
+      document.documentElement.style.overflow = '';
+      document.body.style.overflow = '';
+      overlay.classList.remove('lightbox-overlay--open');
+      lbImg.style.transition = 'transform 0.35s cubic-bezier(0.25, 0.46, 0.45, 0.94)';
+      lbImg.style.transform  = 'translate(' + tx + 'px,' + ty + 'px) scale(' + sx + ',' + sy + ')';
+      lbImg.addEventListener('transitionend', function() {
+        if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+      }, { once: true });
+      document.removeEventListener('keydown', onKey);
+    }
+
+    overlay.addEventListener('click', close);
+    function onKey(e) { if (e.key === 'Escape') close(); }
+    document.addEventListener('keydown', onKey);
+  }
+
+  // Maus-Parallax (X und Y)
+  var mouseX = 0, mouseY = 0;
+  var targetX = 0, targetY = 0;
+  var lightboxOpen = false;
+  var mouseCaptured = false;
+  var parallaxStrength = 0;
+
+  function update() {
+    items.forEach(function(item) {
+      var strength = parseFloat(item.dataset.mouse) * parallaxStrength;
+      var xOffset = -mouseX * strength;
+      var yOffset = -mouseY * strength;
+      item.style.transform = 'translate3d(' + xOffset.toFixed(1) + 'px, ' + yOffset.toFixed(1) + 'px, 0)';
+    });
+  }
+
+  var isTouchDevice = window.matchMedia('(pointer: coarse)').matches;
+
+  if (!isTouchDevice) {
+    window.addEventListener('mousemove', function(e) {
+      if (!parallaxReady) return;
+      targetX = (e.clientX / window.innerWidth - 0.5) * 2;
+      targetY = (e.clientY / window.innerHeight - 0.5) * 2;
+      mouseCaptured = true;
+    });
+  } else {
+    // Mobile: Touch-Position wie Maus-Parallax, bei Loslassen zurück zur Mitte
+    document.addEventListener('touchmove', function(e) {
+      if (!parallaxReady) return;
+      var touch = e.touches[0];
+      targetX = (touch.clientX / window.innerWidth  - 0.5) * 2;
+      targetY = (touch.clientY / window.innerHeight - 0.5) * 2;
+      mouseCaptured = true;
+    }, { passive: true });
+
+    document.addEventListener('touchend', function() {
+      targetX = 0;
+      targetY = 0;
+    }, { passive: true });
+  }
+
+  function loop() {
+    if (parallaxReady) {
+      if (mouseCaptured && parallaxStrength < 1) {
+        parallaxStrength += (1 - parallaxStrength) * 0.03;
+        if (parallaxStrength > 0.999) parallaxStrength = 1;
+      }
+      mouseX += (targetX - mouseX) * 0.08;
+      mouseY += (targetY - mouseY) * 0.08;
+      update();
+    }
+    requestAnimationFrame(loop);
+  }
+  loop();
+})();
+</script>

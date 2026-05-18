@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Play Gallery — Dev</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    body { margin: 0; background: #f0f0f0; font-family: sans-serif; }
+
+    /* ── Gallery ── */
+    .play-grid-wrap {
+      position: relative;
+      width: 100%;
+      padding: 4vw 2vw;
+      overflow: hidden;
+    }
+    .play-grid {
+      column-count: 5;
+      column-gap: 1.5vw;
+    }
+    .play-item {
+      display: block;
+      width: 100%;
+      margin-bottom: 1.5vw;
+      break-inside: avoid;
+      will-change: transform;
+      position: relative;
+      opacity: 0;
+      transition: opacity 0.7s ease;
+    }
+    .play-item img {
+      display: block;
+      width: 100%;
+      height: auto;
+      border-radius: 4px;
+      transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+    .play-item:hover { z-index: 10; }
+    .play-item:hover img { transform: scale(1.12); }
+
+    .lightbox-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0);
+      backdrop-filter: blur(0px);
+      -webkit-backdrop-filter: blur(0px);
+      z-index: 1000;
+      transition: background 0.4s ease, backdrop-filter 0.4s ease, -webkit-backdrop-filter 0.4s ease;
+    }
+    .lightbox-overlay--open {
+      background: rgba(0,0,0,0.78);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+    }
+    .lightbox-img {
+      position: fixed;
+      display: block;
+      border-radius: 6px;
+      pointer-events: none;
+      will-change: transform;
+    }
+
+    @media (max-width: 1200px) { .play-grid { column-count: 4; } }
+    @media (max-width: 900px)  { .play-grid { column-count: 3; column-gap: 2vw; } .play-item { margin-bottom: 2vw; } }
+    @media (max-width: 600px)  { .play-grid { column-count: 2; } }
+
+    /* ── Dev Panel ── */
+    #dev-panel {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      z-index: 9999;
+      font-family: ui-monospace, monospace;
+      font-size: 12px;
+    }
+    #dev-toggle {
+      display: block;
+      margin-left: auto;
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      border: none;
+      background: #111;
+      color: #fff;
+      font-size: 16px;
+      cursor: pointer;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+    }
+    #dev-controls {
+      display: none;
+      margin-top: 8px;
+      background: rgba(10,10,10,0.92);
+      color: #e0e0e0;
+      border-radius: 10px;
+      padding: 14px;
+      width: 280px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+    }
+    #dev-controls h3 {
+      margin: 0 0 12px;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #888;
+    }
+    .dev-row {
+      display: grid;
+      grid-template-columns: 90px 1fr 44px;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 8px;
+    }
+    .dev-label { color: #aaa; white-space: nowrap; }
+    .dev-row input[type=range] {
+      width: 100%;
+      accent-color: #fff;
+      cursor: pointer;
+    }
+    .dev-val {
+      text-align: right;
+      color: #fff;
+      font-weight: bold;
+    }
+    #dev-actions {
+      display: flex;
+      gap: 8px;
+      margin-top: 14px;
+    }
+    .dev-btn {
+      flex: 1;
+      padding: 7px 0;
+      border: 1px solid #444;
+      border-radius: 6px;
+      background: #222;
+      color: #e0e0e0;
+      cursor: pointer;
+      font-family: inherit;
+      font-size: 12px;
+      transition: background 0.15s;
+    }
+    .dev-btn:hover { background: #333; }
+    .dev-btn.primary { background: #fff; color: #111; border-color: #fff; }
+    .dev-btn.primary:hover { background: #ddd; }
+
+  </style>
+</head>
+<body>
+
+<div class="play-grid-wrap">
+  <div class="play-grid" id="playGrid"></div>
+</div>
+
+<div id="dev-panel">
+  <button id="dev-toggle">⚙</button>
+  <div id="dev-controls">
+    <h3>Gallery Config</h3>
+    <div id="dev-sliders"></div>
+    <div id="dev-actions">
+      <button class="dev-btn primary" id="dev-rebuild">Shuffle</button>
+      <button class="dev-btn" id="dev-copy">Copy</button>
+    </div>
+  </div>
+</div>
+
+
+<script>
+  // ===== BILDER HIER EINTRAGEN =====
+  var images = [
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/159_goo_glowing-glass-11-copy_Square.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/156_200120_GOO_CANVAS_C_00.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/157_glass-rock-01_Square.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/155_200127_GOO_CANVAS_06_0075_Square.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/153_untitled_E_02_B-web_Square.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/152_200408_SAM_moss_06_convert_Square.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/147_200407_SAM_overhead_18_convert.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/151_SAM-ambi-tracks-F-04_Square.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/149_200116_GOO_dukers_02_A_Square.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/143_100-spheresonglass-01-c.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/142_woo-alibaba-logo-a-08-01.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/141_spheres-out-of-tubes-02-b.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/160_210810_Landscape-Setup_038_Cam-A_Square.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/144_ForestEnv_17_0032_Square.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/140_bw1hdNBg_Square.jpeg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/136_190923_ONE_turrell_01_Square.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/134_200120_GOO_CANVAS_D_01_0223.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/133_RS_Scan_006_0087_Square.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/130_glowing-glass-01.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/132_MQFF_AA_disp_test_018_0014_Square.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/131_RS_Sunglasses_Looldev_002_0075_Square.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/129_200407_SAM_overhead_11_convert.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/128_woo-alibaba-logo-a-08-04_Square.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/126_victorian-room-ph-04_s01_02.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/124_200121_GOO_pillars_04.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/125_sam-sliding-tiles-00-k_Square.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/119_menadering-river-01_Square.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/120_200120_GOO_CANVAS_D_01_0223_Square.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/114_200127_GOO_CANVAS_18_0075_Square.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/113_200408_SAM_moss_14_convert.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/110_210803_Dust_Portrait_001_0001_Square.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/112_210825_Lookdev_000_Square.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/108_goo_glowing-glass-03_0049_Square.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/106_refracting-stripes-vertical.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/102_victorian-room-02-c_s01_02.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/104_200116_GOO_dukers_02_B_Square.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/103_ForestEnv_16_0032_Square.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/097_200408_SAM_moss_09_convert_Square.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/096_200120_GOO_grid_00.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/099_210803_Dust_Portrait_006_0054_Square.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/095_190923_ONE_turrell_00_Square.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/092_Refractions-03_v001_Square.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/091_goo_canvas_glass-walls_02_Square.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/087_shadow-hall-00-a.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/086_RaySwitch_002_Square.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/082_200406_SAM_overhead_01_convert.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/083_Refractions-01_v001_Square.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/080_210322_OP_01_Square.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/074_glowing-glass-00.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/076_Refractions-04_v001_Square.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/073_RaySwitch_009_Square.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/068_bauhaus_windows_00_0314.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/067_sam-shifting-glass-walls-00-a.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/066_RS_Sunglasses_Looldev_005_Square.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/064_MQFF_Layout_01.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/063_300-frost-cover-00.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/060_210803_Dust_Portrait_007_0078_Square.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/056_210811_Landscape-Setup_044_Cam-A0016_Square.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/054_RS_Sunglasses_Looldev_004_Square.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/050_210803_Dust_Portrait_003_0067_Square.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/052_210825_Lookdev_003_Square.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/046_200212_cracked_04.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/044_goo_canvas_glass-walls_01.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/042_200120_GOO_CANVAS_B_04.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/041_samsung_ambient_window_research04_Square.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/038_MQFF_Layout_02.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/035_spheres-out-of-tubes-00-a.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/034_210803_Dust_Portrait_004_0200_Square.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/033_goo_glowing-glass-11_Square.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/032_200120_GOO_CANVAS_01.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/029_LS_Glass-Server_v001_Cam-04_Square.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/024_210810_Landscape-Setup_035_Cam-A_Square.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/023_rg-closeUp5-highres_Square.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/022_RS_Sunglasses_Looldev_009_Square.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/019_colored-space-05-a0036.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/020_200407_SAM_overhead_10_convert_Square.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/015_200120_GOO_grid_01_Square.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/013_Lambert_008_161005.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/011_200407_SAM_overhead_15_convert.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/008_211-tree-shadows-05-f.jpg',
+    'https://bernd-marbach.de/wp-content/uploads/2025/01/001_200406_SAM_overhead_04_convert_Square.jpg'
+  ];
+  // =================================
+
+  // ── Config (Stellschrauben) ──
+  var cfg = {
+    columns:      5,
+    paddingX:     2,    // vw seitlicher Rand (zieht Gallery zur Mitte)
+    masterScale:  100,  // % globaler Größen-Multiplikator (alle Bilder)
+    scaleMin:     100,  // % Mindestbreite (Variation pro Bild)
+    scaleMax:     120,  // % Maximalbreite (Variation pro Bild)
+    shiftX:       40,   // ± % horizontaler Versatz
+    shiftY:       6,    // ± vw vertikaler Versatz
+    parallaxMin:  15,   // px minimale Parallax-Stärke
+    parallaxMax:  60,   // px maximale Parallax-Stärke
+    boostCap:     2.2,  // Querformat-Multiplikator (Deckel)
+    lerpFactor:   0.08  // Parallax-Trägheit (kleiner = träger)
+  };
+
+  // ── State ──
+  var grid = document.getElementById('playGrid');
+  var wrap = document.querySelector('.play-grid-wrap');
+  var items = [];
+  var seed = 42;
+  var lastShuffled = null;
+  var lastSeed = 0;
+  var fadeTimer = null;
+  var readyTimer = null;
+  var rebuildTimer = null;
+  var parallaxReady = false;
+  var mouseX = 0, mouseY = 0, targetX = 0, targetY = 0;
+  var lightboxOpen = false, mouseCaptured = false, parallaxStrength = 0;
+
+  function rnd() {
+    seed = (seed * 9301 + 49297) % 233280;
+    return seed / 233280;
+  }
+
+  // ── Gallery bauen ──
+  // instant=true: kein Fade-In, gleiche Bilder-Reihenfolge (für Live-Slider)
+  // instant=false/undefined: voller Aufbau mit Fade-In und neuem Shuffle
+  function buildGallery(instant) {
+    clearTimeout(fadeTimer);
+    clearTimeout(readyTimer);
+
+    grid.innerHTML = '';
+    items = [];
+    parallaxReady = false;
+    mouseX = mouseY = targetX = targetY = 0;
+    mouseCaptured = false;
+    parallaxStrength = 0;
+
+    wrap.style.padding = '4vw ' + cfg.paddingX + 'vw';
+    grid.style.columnCount = cfg.columns;
+
+    if (!instant || !lastShuffled) {
+      lastSeed = Math.floor(Math.random() * 233280);
+      lastShuffled = images.slice();
+      for (var i = lastShuffled.length - 1; i > 0; i--) {
+        var j = Math.floor(Math.random() * (i + 1));
+        var tmp = lastShuffled[i]; lastShuffled[i] = lastShuffled[j]; lastShuffled[j] = tmp;
+      }
+    }
+
+    seed = lastSeed;
+
+    lastShuffled.forEach(function(src) {
+      var item = document.createElement('div');
+      item.className = 'play-item';
+
+      var scale = (cfg.scaleMin / 100 + rnd() * (cfg.scaleMax - cfg.scaleMin) / 100) * (cfg.masterScale / 100);
+      var rawWidth = scale * 100;
+      item.style.width = rawWidth.toFixed(1) + '%';
+
+      var shiftX = rnd() * cfg.shiftX * 2 - cfg.shiftX;
+      item.dataset.shiftX = shiftX.toFixed(1);
+      item.style.marginLeft = (shiftX - (rawWidth - 100) / 2).toFixed(1) + '%';
+
+      var shiftY = (rnd() * cfg.shiftY * 2 - cfg.shiftY).toFixed(2);
+      item.style.top = shiftY + 'vw';
+
+      item.dataset.mouse = (cfg.parallaxMin + rnd() * (cfg.parallaxMax - cfg.parallaxMin)).toFixed(1);
+
+      var img = document.createElement('img');
+      img.loading = 'lazy';
+      img.alt = '';
+
+      img.addEventListener('load', function() {
+        var ratio = img.naturalWidth / img.naturalHeight;
+        if (ratio > 1) {
+          var boost = Math.min(ratio, cfg.boostCap);
+          var newWidth = parseFloat(item.style.width) * boost;
+          item.style.width = newWidth.toFixed(1) + '%';
+          item.style.marginLeft = (parseFloat(item.dataset.shiftX) - (newWidth - 100) / 2).toFixed(1) + '%';
+        }
+      });
+
+      img.src = src;
+      item.appendChild(img);
+      img.addEventListener('click', function() { openLightbox(img); });
+
+      grid.appendChild(item);
+      items.push(item);
+    });
+
+    if (instant) {
+      var snap = items.slice();
+      snap.forEach(function(item) {
+        item.style.transition = 'none';
+        item.style.opacity = '1';
+      });
+      requestAnimationFrame(function() {
+        requestAnimationFrame(function() {
+          snap.forEach(function(item) { item.style.transition = ''; });
+        });
+      });
+      parallaxReady = true;
+    } else {
+      fadeTimer = setTimeout(function() {
+        items.forEach(function(item) {
+          item.style.transitionDelay = Math.floor(Math.random() * 700) + 'ms';
+          item.style.opacity = '1';
+        });
+      }, 80);
+      readyTimer = setTimeout(function() {
+        parallaxReady = true;
+        items.forEach(function(item) { item.style.transitionDelay = ''; });
+      }, 1500);
+    }
+  }
+
+  // Debounce für Live-Slider: 120ms nach letzter Bewegung
+  function scheduleLiveBuild() {
+    clearTimeout(rebuildTimer);
+    rebuildTimer = setTimeout(function() { buildGallery(true); }, 120);
+  }
+
+  // ── Lightbox ──
+  function openLightbox(img) {
+    var rect = img.getBoundingClientRect();
+    var maxW = window.innerWidth * 0.88;
+    var maxH = window.innerHeight * 0.88;
+    var ratio = img.naturalWidth / img.naturalHeight;
+    var finalW = ratio > maxW / maxH ? maxW : maxH * ratio;
+    var finalH = ratio > maxW / maxH ? maxW / ratio : maxH;
+    var finalLeft = (window.innerWidth  - finalW) / 2;
+    var finalTop  = (window.innerHeight - finalH) / 2;
+    var tx = rect.left + rect.width  / 2 - (finalLeft + finalW / 2);
+    var ty = rect.top  + rect.height / 2 - (finalTop  + finalH / 2);
+    var sx = rect.width  / finalW;
+    var sy = rect.height / finalH;
+
+    var overlay = document.createElement('div');
+    overlay.className = 'lightbox-overlay';
+    var lbImg = document.createElement('img');
+    lbImg.src = img.src;
+    lbImg.className = 'lightbox-img';
+    lbImg.style.width  = finalW + 'px';
+    lbImg.style.height = finalH + 'px';
+    lbImg.style.left   = finalLeft + 'px';
+    lbImg.style.top    = finalTop  + 'px';
+    lbImg.style.transform = 'translate(' + tx + 'px,' + ty + 'px) scale(' + sx + ',' + sy + ')';
+
+    overlay.appendChild(lbImg);
+    document.body.appendChild(overlay);
+    document.documentElement.style.overflow = 'hidden';
+    document.body.style.overflow = 'hidden';
+    lightboxOpen = true;
+
+    requestAnimationFrame(function() {
+      requestAnimationFrame(function() {
+        overlay.classList.add('lightbox-overlay--open');
+        lbImg.style.transition = 'transform 0.45s cubic-bezier(0.34, 1.4, 0.64, 1)';
+        lbImg.style.transform  = 'translate(0,0) scale(1)';
+      });
+    });
+
+    function close() {
+      lightboxOpen = false;
+      document.documentElement.style.overflow = '';
+      document.body.style.overflow = '';
+      overlay.classList.remove('lightbox-overlay--open');
+      lbImg.style.transition = 'transform 0.35s cubic-bezier(0.25, 0.46, 0.45, 0.94)';
+      lbImg.style.transform  = 'translate(' + tx + 'px,' + ty + 'px) scale(' + sx + ',' + sy + ')';
+      lbImg.addEventListener('transitionend', function() {
+        if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+      }, { once: true });
+      document.removeEventListener('keydown', onKey);
+    }
+
+    overlay.addEventListener('click', close);
+    function onKey(e) { if (e.key === 'Escape') close(); }
+    document.addEventListener('keydown', onKey);
+  }
+
+  // ── Parallax ──
+  function update() {
+    items.forEach(function(item) {
+      var strength = parseFloat(item.dataset.mouse) * parallaxStrength;
+      item.style.transform = 'translate3d(' + (-mouseX * strength).toFixed(1) + 'px,' + (-mouseY * strength).toFixed(1) + 'px,0)';
+    });
+  }
+
+  // Desktop: Maus
+  var isTouchDevice = window.matchMedia('(pointer: coarse)').matches;
+
+  if (!isTouchDevice) {
+    window.addEventListener('mousemove', function(e) {
+      if (!parallaxReady) return;
+      targetX = (e.clientX / window.innerWidth  - 0.5) * 2;
+      targetY = (e.clientY / window.innerHeight - 0.5) * 2;
+      mouseCaptured = true;
+    });
+  }
+
+  // Mobile: Gyro-Parallax
+  if (isTouchDevice) {
+    document.addEventListener('touchmove', function(e) {
+      if (!parallaxReady) return;
+      var touch = e.touches[0];
+      targetX = (touch.clientX / window.innerWidth  - 0.5) * 2;
+      targetY = (touch.clientY / window.innerHeight - 0.5) * 2;
+      mouseCaptured = true;
+    }, { passive: true });
+
+    document.addEventListener('touchend', function() {
+      targetX = 0;
+      targetY = 0;
+    }, { passive: true });
+  }
+
+  function loop() {
+    if (parallaxReady) {
+      if (mouseCaptured && parallaxStrength < 1) {
+        parallaxStrength += (1 - parallaxStrength) * 0.03;
+        if (parallaxStrength > 0.999) parallaxStrength = 1;
+      }
+      mouseX += (targetX - mouseX) * cfg.lerpFactor;
+      mouseY += (targetY - mouseY) * cfg.lerpFactor;
+      update();
+    }
+    requestAnimationFrame(loop);
+  }
+
+  // ── Dev Panel ──
+  var sliderDefs = [
+    { key: 'columns',     label: 'Spalten',      min: 2,    max: 7,    step: 1,    fmt: function(v) { return v; } },
+    { key: 'paddingX',    label: 'Rand X',       min: 0,    max: 25,   step: 1,    fmt: function(v) { return v + 'vw'; } },
+    { key: 'masterScale', label: 'Größe',        min: 60,   max: 150,  step: 5,    fmt: function(v) { return v + '%'; } },
+    { key: 'scaleMin',    label: 'Scale min',    min: 80,   max: 110,  step: 1,    fmt: function(v) { return v + '%'; } },
+    { key: 'scaleMax',    label: 'Scale max',    min: 100,  max: 150,  step: 1,    fmt: function(v) { return v + '%'; } },
+    { key: 'shiftX',      label: 'Shift X ±',   min: 0,    max: 80,   step: 5,    fmt: function(v) { return '±' + v + '%'; } },
+    { key: 'shiftY',      label: 'Shift Y ±',   min: 0,    max: 20,   step: 0.5,  fmt: function(v) { return '±' + v + 'vw'; } },
+    { key: 'parallaxMin', label: 'Px min',       min: 0,    max: 40,   step: 5,    fmt: function(v) { return v + 'px'; } },
+    { key: 'parallaxMax', label: 'Px max',       min: 20,   max: 120,  step: 5,    fmt: function(v) { return v + 'px'; } },
+    { key: 'boostCap',    label: 'Querformat ×', min: 1.0,  max: 4.0,  step: 0.1,  fmt: function(v) { return 'x' + parseFloat(v).toFixed(1); } },
+    { key: 'lerpFactor',  label: 'Trägheit',     min: 0.01, max: 0.20, step: 0.01, fmt: function(v) { return parseFloat(v).toFixed(2); } }
+  ];
+
+  var devSliders = document.getElementById('dev-sliders');
+
+  sliderDefs.forEach(function(def) {
+    var row = document.createElement('div');
+    row.className = 'dev-row';
+
+    var label = document.createElement('span');
+    label.className = 'dev-label';
+    label.textContent = def.label;
+
+    var input = document.createElement('input');
+    input.type = 'range';
+    input.min = def.min;
+    input.max = def.max;
+    input.step = def.step;
+    input.value = cfg[def.key];
+
+    var val = document.createElement('span');
+    val.className = 'dev-val';
+    val.textContent = def.fmt(cfg[def.key]);
+
+    input.addEventListener('input', function() {
+      cfg[def.key] = parseFloat(input.value);
+      val.textContent = def.fmt(cfg[def.key]);
+      scheduleLiveBuild();
+    });
+
+    row.appendChild(label);
+    row.appendChild(input);
+    row.appendChild(val);
+    devSliders.appendChild(row);
+  });
+
+  document.getElementById('dev-toggle').addEventListener('click', function() {
+    var ctrl = document.getElementById('dev-controls');
+    ctrl.style.display = ctrl.style.display === 'none' ? 'block' : 'none';
+  });
+
+  // Shuffle: neuer Random-Seed und neues Bild-Layout
+  document.getElementById('dev-rebuild').addEventListener('click', function() {
+    buildGallery(false);
+  });
+
+  document.getElementById('dev-copy').addEventListener('click', function() {
+    var lines = [
+      'columns:     ' + cfg.columns,
+      'paddingX:    ' + cfg.paddingX + 'vw',
+      'masterScale: ' + cfg.masterScale + '%',
+      'scale:       ' + cfg.scaleMin + '% – ' + cfg.scaleMax + '%',
+      'shiftX:      ±' + cfg.shiftX + '%',
+      'shiftY:      ±' + cfg.shiftY + 'vw',
+      'parallax:    ' + cfg.parallaxMin + 'px – ' + cfg.parallaxMax + 'px',
+      'boostCap:    ' + parseFloat(cfg.boostCap).toFixed(1),
+      'lerpFactor:  ' + parseFloat(cfg.lerpFactor).toFixed(2)
+    ];
+    var btn = document.getElementById('dev-copy');
+    navigator.clipboard.writeText(lines.join('\n')).then(function() {
+      btn.textContent = '✓ Kopiert';
+      setTimeout(function() { btn.textContent = 'Copy'; }, 2000);
+    });
+  });
+
+  buildGallery(false);
+  loop();
+</script>
+
+</body>
+</html>
