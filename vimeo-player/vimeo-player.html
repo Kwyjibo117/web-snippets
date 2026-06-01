@@ -119,13 +119,11 @@
   </div>
 </div>
 
-<script src="https://player.vimeo.com/api/player.js"></script>
 <script>
-  // Mobile-Detection
   var isMobile = /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent)
                  || (window.matchMedia && window.matchMedia('(pointer: coarse)').matches);
 
-  var P=null, playing=false, dur=0, inFS=false, hideTimer=null, started=false;
+  var P=null, playing=false, dur=0, inFS=false, hideTimer=null, started=false, pendingPlay=false;
   var vf   = document.getElementById('vf'),
       tl   = document.getElementById('tl'),
       tlb  = document.getElementById('tl-btn'),
@@ -134,24 +132,15 @@
       fill = document.getElementById('fill'),
       fs   = document.getElementById('fs'),
       fsIc = document.getElementById('fs-icon'),
-      ctrl = document.getElementById('ctrl'),
       pw   = document.getElementById('pw');
 
   var FE = '<path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/>',
       FX = '<path d="M5 16h3v3h2v-5H5v2zm3-8H5v2h5V5H8v3zm6 11h2v-3h3v-2h-5v5zm2-11V5h-2v5h5V8h-3z"/>';
 
-  // Mobile: Vimeos eigene Controls aktivieren
   if (isMobile) {
     pw.classList.add('is-mobile');
     vf.src = vf.src.replace('controls=0', 'controls=1');
   }
-
-  // Player früh initialisieren (Pflicht für Sound auf Mobile)
-  P = new Vimeo.Player(vf);
-  P.getDuration().then(function(d) { dur = d; });
-  P.on('timeupdate', function(d) {
-    fill.style.width = (d.seconds / d.duration * 100) + '%';
-  });
 
   function showUI() {
     if (!started || isMobile) return;
@@ -179,8 +168,8 @@
   tl.addEventListener('click', function() {
     tl.classList.add('hidden');
     started = true;
-    if (!isMobile) ov.style.display = 'block';
-    P.play();
+    ov.style.display = 'block';
+    if (P) { P.play(); } else { pendingPlay = true; }
     playing = true;
     showUI();
   });
@@ -188,7 +177,6 @@
   ov.addEventListener('click', function() {
     if (!P) return;
     playing ? P.pause() : P.play();
-    playing = !playing;
     showUI();
   });
 
@@ -225,4 +213,24 @@
   }
   document.addEventListener('fullscreenchange', onFSChange);
   document.addEventListener('webkitfullscreenchange', onFSChange);
+
+  function initPlayer() {
+    P = new Vimeo.Player(vf);
+    P.getDuration().then(function(d) { dur = d; });
+    P.on('play',  function() { playing = true; });
+    P.on('pause', function() { playing = false; });
+    P.on('timeupdate', function(d) {
+      fill.style.width = (d.seconds / d.duration * 100) + '%';
+    });
+    if (pendingPlay) P.play();
+  }
+
+  if (typeof Vimeo !== 'undefined') {
+    initPlayer();
+  } else {
+    var s = document.createElement('script');
+    s.src = 'https://player.vimeo.com/api/player.js';
+    s.onload = initPlayer;
+    document.head.appendChild(s);
+  }
 </script>
