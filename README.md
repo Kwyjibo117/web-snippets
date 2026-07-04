@@ -33,11 +33,11 @@ web-snippets/
 
 ### 1. Vimeo Custom Player (`vimeo-player/`)
 
-Custom-Player für Vimeo-Videos mit eigenem Thumbnail-Overlay, minimalen Custom Controls (Progressbar + Fullscreen-Button), Auto-Hide bei Inaktivität und Loop-Funktion. Auf Mobile wird automatisch auf Vimeos eigene Controls umgeschaltet, damit Sound und Fullscreen nativ funktionieren.
+Custom-Player für Vimeo-Videos mit eigenem Thumbnail-Overlay, minimalen Custom Controls (Progressbar mit Drag-Scrubbing + Fullscreen-Button), Auto-Hide bei Inaktivität und Loop-Funktion. Auf Mobile wird automatisch auf Vimeos eigene Controls umgeschaltet, damit Sound und Fullscreen nativ funktionieren. Lädt das Vimeo-SDK nicht (Adblocker, Netzfehler), fällt der Player automatisch auf Vimeos native Controls zurück. Mehrere Player pro Seite sind möglich — das Snippet einfach mehrfach einfügen, das SDK wird nur einmal geladen.
 
 **Wo einbauen:** Auf Projektseiten als Custom Code / HTML-Modul.
 
-**Anpassen:** Die Vimeo-Video-ID in der `<iframe src="...">` URL austauschen. Vimeos eigenes Thumbnail wird automatisch geladen — falls's nicht passt, im Vimeo-Dashboard unter Settings → Thumbnail anpassen.
+**Anpassen:** Die Vimeo-Video-ID im `data-vp-id`-Attribut am `<div class="vp">` austauschen. Vimeos eigenes Thumbnail wird automatisch geladen — falls's nicht passt, im Vimeo-Dashboard unter Settings → Thumbnail anpassen.
 
 ### 2. Semplice Video Loop Fix (`semplice-video-loop/`)
 

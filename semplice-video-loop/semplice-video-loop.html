@@ -3,10 +3,15 @@
   ====================================
   Verhindert, dass selbst-gehostete Videos in Semplice beim Klick pausieren.
   Videos sollen wie animierte Bilder im Loop laufen.
-  
+
   Optional: per data-link Attribut am .smp-video können Videos klickbar zu
   einer URL weiterleiten (z.B. zur Projektseite).
-  
+
+  Robust gegen:
+  - mehrfaches Ausführen (idempotent, kein doppeltes Overlay)
+  - dynamisch nachgeladene Videos / AJAX-Seitenübergänge
+  - nachgeladene Bilder (title-Tooltip-Bereinigung läuft erneut)
+
   Einbau: Semplice → Settings → Custom Code → JS/HTML Footer
 -->
 
@@ -23,7 +28,7 @@
     pointer-events: none !important;
   }
 
-  /* Cursor erbt von body */
+  /* Cursor erbt von body (lässt Custom-Cursor durch) */
   .smp-video, .smp-video * { cursor: inherit !important; }
 
   /* Wenn als Link markiert: Pointer-Cursor */
@@ -31,44 +36,116 @@
 </style>
 
 <script>
-  document.addEventListener('DOMContentLoaded', function() {
-    document.querySelectorAll('.smp-video').forEach(function(wrap) {
+  (function () {
+    'use strict';
+
+    // Ein einzelnes .smp-video initialisieren (nur einmal pro Element)
+    function initVideo(wrap) {
+      if (wrap.dataset.smpLoopInit) return;
+      wrap.dataset.smpLoopInit = '1';
+
       var video = wrap.querySelector('video');
-      if (!video) return;
+      if (!video) {
+        // Video evtl. noch nicht im DOM – Flag zurücksetzen, damit ein
+        // späterer Durchlauf es erneut versucht.
+        delete wrap.dataset.smpLoopInit;
+        return;
+      }
 
       video.loop = true;
       video.muted = true;
       video.playsInline = true;
-      video.play().catch(function() {});
+      video.play().catch(function () {});
 
-      // Semplices is-paused-Klasse permanent entfernen
-      var observer = new MutationObserver(function() {
+      // Semplices is-paused-Klasse permanent entfernen + sofort weiterspielen
+      var observer = new MutationObserver(function () {
         if (wrap.classList.contains('is-paused')) {
           wrap.classList.remove('is-paused');
+          video.play().catch(function () {});
         }
       });
       observer.observe(wrap, { attributes: true, attributeFilter: ['class'] });
 
-      // Pause-Event direkt am Video abfangen
-      video.addEventListener('pause', function() {
-        setTimeout(function() {
-          if (video.ended === false) video.play().catch(function() {});
+      // Pause-Event direkt am Video abfangen → wieder starten
+      video.addEventListener('pause', function () {
+        setTimeout(function () {
+          if (!video.ended) video.play().catch(function () {});
         }, 10);
       });
 
-      // Click-Handler: entweder weiterleiten oder Klick schlucken
-      var link = wrap.getAttribute('data-link');
-      wrap.addEventListener('click', function(e) {
-        e.stopPropagation();
-        e.preventDefault();
-        if (link) window.location.href = link;
-      }, true);
+      // Link: eigenes data-link ODER Semplices data-smp-link vom Parent
+      var smpContent = wrap.closest('smp-content');
+      var link = wrap.getAttribute('data-link')
+        || (smpContent && smpContent.getAttribute('data-smp-link'))
+        || null;
+      var target = (smpContent && smpContent.getAttribute('data-smp-link-target')) || '_self';
 
-      video.addEventListener('click', function(e) {
+      // Container muss positioniert sein, damit das Overlay sitzt
+      if (window.getComputedStyle(wrap).position === 'static') {
+        wrap.style.position = 'relative';
+      }
+
+      // Klick-Overlay blockiert Semplices Handler immer
+      var overlay = document.createElement('div');
+      overlay.style.cssText =
+        'position:absolute;top:0;left:0;width:100%;height:100%;z-index:9999;cursor:' +
+        (link ? 'pointer' : 'default');
+      overlay.addEventListener('click', function (e) {
         e.stopPropagation();
         e.preventDefault();
-        if (link) window.location.href = link;
-      }, true);
+        if (link) {
+          if (target === '_blank') {
+            window.open(link, '_blank');
+          } else {
+            window.location.href = link;
+          }
+        }
+      });
+      wrap.appendChild(overlay);
+    }
+
+    // title-Attribute entfernen (verhindert Browser-Tooltips)
+    function cleanTitles(root) {
+      (root || document).querySelectorAll('img[title]').forEach(function (img) {
+        img.removeAttribute('title');
+      });
+    }
+
+    function run() {
+      document.querySelectorAll('.smp-video').forEach(initVideo);
+      cleanTitles();
+    }
+
+    // Initial ausführen (auch wenn DOM schon fertig ist)
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', run);
+    } else {
+      run();
+    }
+
+    // Nachgeladene Inhalte / AJAX-Seitenübergänge abdecken.
+    // Debounced via requestAnimationFrame, damit es bei vielen Mutationen
+    // nicht in jeder Iteration feuert.
+    var scheduled = false;
+    var bodyObserver = new MutationObserver(function () {
+      if (scheduled) return;
+      scheduled = true;
+      requestAnimationFrame(function () {
+        scheduled = false;
+        run();
+      });
     });
-  });
+
+    function observeBody() {
+      if (document.body) {
+        bodyObserver.observe(document.body, { childList: true, subtree: true });
+      }
+    }
+
+    if (document.body) {
+      observeBody();
+    } else {
+      document.addEventListener('DOMContentLoaded', observeBody);
+    }
+  })();
 </script>

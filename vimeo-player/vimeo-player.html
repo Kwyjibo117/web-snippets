@@ -1,80 +1,91 @@
 <!--
   Vimeo Custom Player für Semplice
   ================================
-  - Desktop: Custom Controls (Progressbar, Fullscreen-Button, Auto-Hide)
+  - Desktop: Custom Controls (Progressbar mit Drag-Scrubbing, Fullscreen-Button, Auto-Hide)
   - Mobile: Vimeos eigene Controls (für Sound & Fullscreen-Kompatibilität)
-  - Custom Thumbnail-Layer mit Fade-Out
+  - Custom Thumbnail-Layer mit Fade-Out, per Tastatur bedienbar (Tab + Enter/Space)
   - Loop aktiviert
   - Vimeos eigenes Thumbnail wird angezeigt (kein lokales Bild)
-  
+  - Fallback auf Vimeos native Controls, wenn das Player-SDK nicht lädt (Adblocker, Netzfehler)
+  - Mehrere Player pro Seite möglich: Snippet einfach mehrfach einfügen, SDK wird nur einmal geladen
+
   Einbau in Semplice: Custom Code / HTML-Modul
-  Video-ID austauschen in der iframe src (aktuell: 1156843607)
+  Video-ID austauschen im data-vp-id Attribut am <div class="vp"> (aktuell: 1156843607)
 -->
 
 <style>
+  /* Abgerundete Ecken: liegt auf dem Container, der overflow:hidden hat,
+     und schneidet so den iframe rund ab (CSS greift nicht in den iframe selbst) */
+  .vp { border-radius: 6px; }
+  /* Im Fullscreen keine Rundung */
+  .vp:fullscreen, .vp:-webkit-full-screen { border-radius: 0; }
+
   /* Cursor erbt vom body (= Custom Website-Cursor) */
-  #pw, #pw * { cursor: inherit !important; }
-  #pw button { cursor: inherit !important; }
+  .vp, .vp * { cursor: inherit !important; }
+  .vp button { cursor: inherit !important; }
 
   /* Im Fullscreen: System-Cursor */
-  #pw:fullscreen, #pw:fullscreen *,
-  #pw:-webkit-full-screen, #pw:-webkit-full-screen * {
+  .vp:fullscreen, .vp:fullscreen *,
+  .vp:-webkit-full-screen, .vp:-webkit-full-screen * {
     cursor: default !important;
   }
   /* Nach Inaktivität im Fullscreen: ausblenden */
-  #pw:fullscreen.idle, #pw:fullscreen.idle *,
-  #pw:-webkit-full-screen.idle, #pw:-webkit-full-screen.idle * {
+  .vp:fullscreen.vp-idle, .vp:fullscreen.vp-idle *,
+  .vp:-webkit-full-screen.vp-idle, .vp:-webkit-full-screen.vp-idle * {
     cursor: none !important;
   }
 
-  #pw:fullscreen,
-  #pw:-webkit-full-screen {
+  .vp:fullscreen,
+  .vp:-webkit-full-screen {
     width: 100vw !important;
     height: 100vh !important;
     max-width: none !important;
     background: #000;
   }
-  #pw:fullscreen .aspect,
-  #pw:-webkit-full-screen .aspect {
+  .vp:fullscreen .vp-aspect,
+  .vp:-webkit-full-screen .vp-aspect {
     padding-bottom: 0 !important;
     height: 100vh !important;
   }
 
   /* Thumbnail-Fade */
-  #tl {
+  .vp-tl {
     transition: opacity .5s ease;
   }
-  #tl.hidden {
+  .vp-tl.vp-hidden {
     opacity: 0;
     pointer-events: none;
   }
 
   /* Controls per Opacity */
-  #ctrl {
+  .vp-ctrl {
     opacity: 0;
     pointer-events: none;
     transition: opacity .2s ease;
   }
-  #pw.show-ctrl #ctrl {
+  .vp.vp-show-ctrl .vp-ctrl {
     opacity: 1;
     pointer-events: auto;
   }
 
   /* Progressbar */
-  #prog {
+  .vp-prog {
     flex: 1;
     height: 32px;
     display: flex;
     align-items: center;
     position: relative;
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
   }
-  #prog-track {
+  .vp-prog-track {
     width: 100%;
     height: 3px;
     background: rgba(255,255,255,.25);
     border-radius: 2px;
   }
-  #fill {
+  .vp-fill {
     height: 100%;
     background: #fff;
     border-radius: 2px;
@@ -83,154 +94,252 @@
   }
 
   /* Mobile: Custom Controls und Overlay verstecken */
-  #pw.is-mobile #ctrl,
-  #pw.is-mobile #ov {
+  .vp.vp-mobile .vp-ctrl,
+  .vp.vp-mobile .vp-ov {
+    display: none !important;
+  }
+
+  /* SDK-Fallback: alles Custom ausblenden, Vimeo übernimmt */
+  .vp.vp-native .vp-ctrl,
+  .vp.vp-native .vp-ov,
+  .vp.vp-native .vp-tl {
     display: none !important;
   }
 </style>
 
-<div id="pw" style="position:relative; width:100%; background:#000; overflow:hidden;">
-  <div class="aspect" style="position:relative; padding-bottom:56.25%; height:0;">
-    <iframe id="vf"
-      src="https://player.vimeo.com/video/1156843607?autoplay=0&controls=0&title=0&byline=0&portrait=0&dnt=1&loop=1"
+<div class="vp" data-vp-id="1156843607" style="position:relative; width:100%; background:#000; overflow:hidden;">
+  <div class="vp-aspect" style="position:relative; padding-bottom:56.25%; height:0;">
+    <iframe class="vp-vf"
+      title="Vimeo Video-Player"
+      loading="lazy"
       style="position:absolute; inset:0; width:100%; height:100%; border:0;"
-      allow="autoplay; fullscreen">
+      allow="autoplay; fullscreen; picture-in-picture">
     </iframe>
-    <div id="ov" style="display:none; position:absolute; inset:0; z-index:4;"></div>
+    <div class="vp-ov" style="display:none; position:absolute; inset:0; z-index:4;"></div>
   </div>
 
   <!-- Play-Overlay (Vimeo zeigt sein eigenes Thumbnail dahinter) -->
-  <div id="tl" style="position:absolute; inset:0; z-index:5; display:flex; align-items:center; justify-content:center; background:transparent;">
-    <div id="tl-btn" style="width:56px; height:56px; border:1.5px solid rgba(255,255,255,.9); border-radius:50%; display:flex; align-items:center; justify-content:center; background:rgba(0,0,0,.3); backdrop-filter:blur(8px); z-index:1; transition:transform .2s;">
+  <div class="vp-tl" role="button" tabindex="0" aria-label="Video abspielen" style="position:absolute; inset:0; z-index:5; display:flex; align-items:center; justify-content:center; background:transparent;">
+    <div class="vp-tl-btn" style="width:56px; height:56px; border:1.5px solid rgba(255,255,255,.9); border-radius:50%; display:flex; align-items:center; justify-content:center; background:rgba(0,0,0,.3); backdrop-filter:blur(8px); z-index:1; transition:transform .2s;">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="white" style="margin-left:3px;"><polygon points="5,3 19,12 5,21"/></svg>
     </div>
   </div>
 
   <!-- Custom Controls (nur Desktop) -->
-  <div id="ctrl" style="position:absolute; bottom:0; left:0; right:0; z-index:6; padding:24px 14px 14px; display:flex; flex-direction:row; align-items:center; gap:10px;">
-    <div id="prog">
-      <div id="prog-track">
-        <div id="fill"></div>
+  <div class="vp-ctrl" style="position:absolute; bottom:0; left:0; right:0; z-index:6; padding:24px 14px 14px; display:flex; flex-direction:row; align-items:center; gap:10px;">
+    <div class="vp-prog">
+      <div class="vp-prog-track">
+        <div class="vp-fill"></div>
       </div>
     </div>
-    <button id="fs" style="background:none; border:none; padding:4px; display:flex; opacity:.75; flex-shrink:0;">
-      <svg id="fs-icon" width="20" height="20" viewBox="0 0 24 24" fill="white"><path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/></svg>
+    <button class="vp-fs" aria-label="Vollbild umschalten" style="background:none; border:none; padding:4px; display:flex; opacity:.75; flex-shrink:0;">
+      <svg class="vp-fs-icon" width="20" height="20" viewBox="0 0 24 24" fill="white"><path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/></svg>
     </button>
   </div>
 </div>
 
 <script>
+(function () {
+  /* hover:none filtert Touchscreen-Laptops raus, die sonst fälschlich als mobile gelten */
   var isMobile = /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent)
-                 || (window.matchMedia && window.matchMedia('(pointer: coarse)').matches);
-
-  var P=null, playing=false, dur=0, inFS=false, hideTimer=null, started=false, pendingPlay=false;
-  var vf   = document.getElementById('vf'),
-      tl   = document.getElementById('tl'),
-      tlb  = document.getElementById('tl-btn'),
-      ov   = document.getElementById('ov'),
-      prog = document.getElementById('prog'),
-      fill = document.getElementById('fill'),
-      fs   = document.getElementById('fs'),
-      fsIc = document.getElementById('fs-icon'),
-      pw   = document.getElementById('pw');
+                 || (window.matchMedia && window.matchMedia('(pointer: coarse) and (hover: none)').matches);
 
   var FE = '<path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/>',
       FX = '<path d="M5 16h3v3h2v-5H5v2zm3-8H5v2h5V5H8v3zm6 11h2v-3h3v-2h-5v5zm2-11V5h-2v5h5V8h-3z"/>';
 
-  if (isMobile) {
-    pw.classList.add('is-mobile');
-    vf.src = vf.src.replace('controls=0', 'controls=1');
+  /* SDK nur einmal laden, auch wenn das Snippet mehrfach auf der Seite steckt */
+  function loadSDK(onReady, onFail) {
+    if (window.Vimeo && window.Vimeo.Player) { onReady(); return; }
+    if (!window.__vpSdkPromise) {
+      window.__vpSdkPromise = new Promise(function (resolve, reject) {
+        var s = document.createElement('script');
+        s.src = 'https://player.vimeo.com/api/player.js';
+        s.onload = resolve;
+        s.onerror = reject;
+        document.head.appendChild(s);
+      });
+    }
+    window.__vpSdkPromise.then(onReady, onFail);
   }
 
-  function showUI() {
-    if (!started || isMobile) return;
-    pw.classList.add('show-ctrl');
-    pw.classList.remove('idle');
-    clearTimeout(hideTimer);
-    hideTimer = setTimeout(function() {
-      pw.classList.remove('show-ctrl');
-      if (inFS) pw.classList.add('idle');
-    }, 2500);
-  }
+  function init(root) {
+    root.setAttribute('data-vp-init', '');
 
-  if (!isMobile) {
-    pw.addEventListener('mousemove', showUI);
-    pw.addEventListener('mouseleave', function() {
-      if (inFS) return;
-      pw.classList.remove('show-ctrl');
-      pw.classList.remove('idle');
+    var videoId = root.getAttribute('data-vp-id');
+    var vf   = root.querySelector('.vp-vf'),
+        tl   = root.querySelector('.vp-tl'),
+        tlb  = root.querySelector('.vp-tl-btn'),
+        ov   = root.querySelector('.vp-ov'),
+        prog = root.querySelector('.vp-prog'),
+        fill = root.querySelector('.vp-fill'),
+        fs   = root.querySelector('.vp-fs'),
+        fsIc = root.querySelector('.vp-fs-icon');
+
+    var P = null, playing = false, dur = 0, inFS = false, hideTimer = null,
+        started = false, pendingPlay = false, fellBack = false, scrubbing = false;
+
+    function buildSrc(nativeControls) {
+      var params = new URLSearchParams({
+        autoplay: '0', title: '0', byline: '0', portrait: '0',
+        dnt: '1', loop: '1', controls: nativeControls ? '1' : '0'
+      });
+      return 'https://player.vimeo.com/video/' + videoId + '?' + params.toString();
+    }
+
+    if (isMobile) root.classList.add('vp-mobile');
+    vf.src = buildSrc(isMobile);
+
+    /* Lädt das SDK nicht (Adblocker, Netzfehler, Hänger): Custom-UI weg,
+       Vimeos native Controls übernehmen — Video bleibt abspielbar */
+    function fallbackNative() {
+      if (fellBack) return;
+      fellBack = true;
+      root.classList.add('vp-native');
+      vf.src = buildSrc(true);
+    }
+
+    function showUI() {
+      if (!started || isMobile) return;
+      root.classList.add('vp-show-ctrl');
+      root.classList.remove('vp-idle');
       clearTimeout(hideTimer);
-    });
-    tl.addEventListener('mouseenter', function() { tlb.style.transform = 'scale(1.08)'; });
-    tl.addEventListener('mouseleave', function() { tlb.style.transform = 'scale(1)'; });
-  }
-
-  tl.addEventListener('click', function() {
-    tl.classList.add('hidden');
-    started = true;
-    ov.style.display = 'block';
-    if (P) { P.play(); } else { pendingPlay = true; }
-    playing = true;
-    showUI();
-  });
-
-  ov.addEventListener('click', function() {
-    if (!P) return;
-    playing ? P.pause() : P.play();
-    showUI();
-  });
-
-  prog.addEventListener('click', function(e) {
-    e.stopPropagation();
-    if (!P || !dur) return;
-    var r = prog.getBoundingClientRect(), pct = (e.clientX - r.left) / r.width;
-    pct = Math.max(0, Math.min(1, pct));
-    P.setCurrentTime(pct * dur);
-    fill.style.width = (pct * 100) + '%';
-  });
-
-  fs.addEventListener('click', function(e) {
-    e.stopPropagation();
-    var isFS = document.fullscreenElement || document.webkitFullscreenElement;
-    if (!isFS) {
-      if (pw.requestFullscreen) pw.requestFullscreen();
-      else if (pw.webkitRequestFullscreen) pw.webkitRequestFullscreen();
-      else if (P && P.requestFullscreen) P.requestFullscreen();
-    } else {
-      if (document.exitFullscreen) document.exitFullscreen();
-      else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+      hideTimer = setTimeout(function () {
+        if (scrubbing) return;
+        root.classList.remove('vp-show-ctrl');
+        if (inFS) root.classList.add('vp-idle');
+      }, 2500);
     }
-  });
 
-  function onFSChange() {
-    inFS = !!(document.fullscreenElement || document.webkitFullscreenElement);
-    fsIc.innerHTML = inFS ? FX : FE;
-    if (inFS) showUI();
-    else {
-      pw.classList.remove('idle');
-      pw.classList.remove('show-ctrl');
+    if (!isMobile) {
+      root.addEventListener('mousemove', showUI);
+      root.addEventListener('mouseleave', function () {
+        if (inFS || scrubbing) return;
+        root.classList.remove('vp-show-ctrl');
+        root.classList.remove('vp-idle');
+        clearTimeout(hideTimer);
+      });
+      tl.addEventListener('mouseenter', function () { tlb.style.transform = 'scale(1.08)'; });
+      tl.addEventListener('mouseleave', function () { tlb.style.transform = 'scale(1)'; });
     }
-  }
-  document.addEventListener('fullscreenchange', onFSChange);
-  document.addEventListener('webkitfullscreenchange', onFSChange);
 
-  function initPlayer() {
-    P = new Vimeo.Player(vf);
-    P.getDuration().then(function(d) { dur = d; });
-    P.on('play',  function() { playing = true; });
-    P.on('pause', function() { playing = false; });
-    P.on('timeupdate', function(d) {
-      fill.style.width = (d.seconds / d.duration * 100) + '%';
+    /* Abspielen kann fehlschlagen (z.B. iOS-Autoplay-Policy) — dann nicht auf
+       schwarzem Bild sitzen bleiben: Desktop zeigt das Thumbnail wieder,
+       Mobile gibt den Blick auf Vimeos eigenen Play-Button frei */
+    function tryPlay() {
+      P.play().catch(function () {
+        if (isMobile) {
+          tl.classList.add('vp-hidden');
+        } else {
+          tl.classList.remove('vp-hidden');
+          started = false;
+        }
+      });
+    }
+
+    function start() {
+      if (started) return;
+      tl.classList.add('vp-hidden');
+      started = true;
+      ov.style.display = 'block';
+      if (P) { tryPlay(); } else { pendingPlay = true; }
+      showUI();
+    }
+
+    tl.addEventListener('click', start);
+    tl.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        start();
+      }
     });
-    if (pendingPlay) P.play();
+
+    ov.addEventListener('click', function () {
+      if (!P) return;
+      if (playing) { P.pause().catch(function () {}); } else { tryPlay(); }
+      showUI();
+    });
+
+    /* Scrubbing per Pointer-Events: Klick und Ziehen */
+    function scrubPct(e) {
+      var r = prog.getBoundingClientRect();
+      var pct = (e.clientX - r.left) / r.width;
+      pct = Math.max(0, Math.min(1, pct));
+      fill.style.width = (pct * 100) + '%';
+      return pct;
+    }
+    prog.addEventListener('pointerdown', function (e) {
+      if (!P || !dur) return;
+      scrubbing = true;
+      if (prog.setPointerCapture) prog.setPointerCapture(e.pointerId);
+      scrubPct(e);
+    });
+    prog.addEventListener('pointermove', function (e) {
+      if (scrubbing) scrubPct(e);
+    });
+    prog.addEventListener('pointerup', function (e) {
+      if (!scrubbing) return;
+      scrubbing = false;
+      P.setCurrentTime(scrubPct(e) * dur).catch(function () {});
+      showUI();
+    });
+    prog.addEventListener('pointercancel', function () {
+      scrubbing = false;
+    });
+
+    fs.addEventListener('click', function (e) {
+      e.stopPropagation();
+      var isFS = document.fullscreenElement || document.webkitFullscreenElement;
+      if (!isFS) {
+        if (root.requestFullscreen) root.requestFullscreen();
+        else if (root.webkitRequestFullscreen) root.webkitRequestFullscreen();
+        else if (P && P.requestFullscreen) P.requestFullscreen();
+      } else {
+        if (document.exitFullscreen) document.exitFullscreen();
+        else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+      }
+    });
+
+    function onFSChange() {
+      inFS = (document.fullscreenElement || document.webkitFullscreenElement) === root;
+      fsIc.innerHTML = inFS ? FX : FE;
+      if (inFS) showUI();
+      else {
+        root.classList.remove('vp-idle');
+        root.classList.remove('vp-show-ctrl');
+      }
+    }
+    document.addEventListener('fullscreenchange', onFSChange);
+    document.addEventListener('webkitfullscreenchange', onFSChange);
+
+    function initPlayer() {
+      if (fellBack) return;
+      P = new Vimeo.Player(vf);
+      P.getDuration().then(function (d) { dur = d; }).catch(function () {});
+      /* playing wird nur über SDK-Events gepflegt, nie optimistisch gesetzt —
+         sonst läuft der Zustand auseinander, wenn play() abgelehnt wird */
+      P.on('play',  function () { playing = true; });
+      P.on('pause', function () { playing = false; });
+      P.on('timeupdate', function (d) {
+        if (d.duration) dur = d.duration;
+        if (!scrubbing && d.duration) {
+          fill.style.width = (d.seconds / d.duration * 100) + '%';
+        }
+      });
+      P.on('error', function (err) {
+        console.warn('Vimeo-Player-Fehler:', err);
+      });
+      if (pendingPlay) { pendingPlay = false; tryPlay(); }
+    }
+
+    /* Timeout fängt hängende SDK-Loads ab, onerror fängt blockierte/fehlgeschlagene */
+    var sdkTimer = setTimeout(fallbackNative, 10000);
+    loadSDK(
+      function () { clearTimeout(sdkTimer); initPlayer(); },
+      function () { clearTimeout(sdkTimer); fallbackNative(); }
+    );
   }
 
-  if (typeof Vimeo !== 'undefined') {
-    initPlayer();
-  } else {
-    var s = document.createElement('script');
-    s.src = 'https://player.vimeo.com/api/player.js';
-    s.onload = initPlayer;
-    document.head.appendChild(s);
-  }
+  var roots = document.querySelectorAll('.vp:not([data-vp-init])');
+  for (var i = 0; i < roots.length; i++) init(roots[i]);
+})();
 </script>
